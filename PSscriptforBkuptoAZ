@@ -1,0 +1,27 @@
+# Set your variables
+$serverInstance = "localhost"  # SQL Server instance name
+$databaseName = "YourDatabaseName"  # Specify the name of the database you want to backup
+$backupPath = "C:\Backup\"  # Specify the local backup path
+$blobContainerUrl = "https://yourstorageaccount.blob.core.windows.net/yourcontainer"  # Replace with your blob container URL
+$sasKey = "?sv=yourSASKey"  # Replace with your SAS key
+
+# Authenticate using Windows Authentication to SSMS
+$sqlCredential = Get-Credential -Credential "$env:USERNAME"
+
+# Create a timestamp for the backup file
+$timestamp = Get-Date -Format "yyyyMMddHHmmss"
+$backupFileName = "$databaseName-$timestamp.bak"
+$backupFilePath = Join-Path -Path $backupPath -ChildPath $backupFileName
+
+# Perform the database backup
+$backupQuery = "BACKUP DATABASE [$databaseName] TO DISK = N'$backupFilePath' WITH NOFORMAT, NOINIT, SKIP, STATS = 10"
+Invoke-Sqlcmd -ServerInstance $serverInstance -Database "master" -Query $backupQuery -Credential $sqlCredential
+
+# Transfer the backup to the Azure Storage Blob using AzCopy
+$azCopyPath = "C:\Program Files (x86)\Microsoft SDKs\Azure\AzCopy\AzCopy.exe"  # Adjust the path as needed
+$destinationBlobUrl = "$blobContainerUrl/$backupFileName$sasKey"
+
+& $azCopyPath /Source:$backupPath /Dest:$destinationBlobUrl /Y
+
+# Optional: Clean up local backup after transfer
+Remove-Item -Path $backupFilePath
